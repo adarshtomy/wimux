@@ -1,0 +1,16 @@
+[Unit]
+Description=Active-standby Wi-Fi failover daemon
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m wifi_mux.main --config /etc/wifi-mux/wifi-mux.toml
+WorkingDirectory=/opt/wifi-mux
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
