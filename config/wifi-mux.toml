@@ -3,8 +3,8 @@
 # nmcli connection show
 
 [primary]
-interface = "<alfa-interface>"
-connection = "<primary-networkmanager-connection>"
+interface = "wlx00c0caafffca"
+connection = "HEVEN_2G"
 
 [backup]
 interface = "<internal-interface>"
@@ -14,9 +14,6 @@ connection = "<backup-networkmanager-connection>"
 interval = 3
 failure_threshold = 3
 recovery_threshold = 3
-probe_host = "example.com"
-probe_url = "https://connectivity-check.ubuntu.com/"
-timeout = 5
 
 [notifications]
 enabled = true

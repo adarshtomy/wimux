@@ -7,10 +7,12 @@ name = "wifi-mux"
 version = "0.1.0"
 description = "Active-standby Wi-Fi failover daemon for NetworkManager"
 requires-python = ">=3.11"
-authors = [{ name = "adarshtomy", email = "adarshtomy0007@gmail.com" }]
+authors = [
+    { name = "Adarsh Tomy" }
+]
 
 [project.scripts]
-wifi-mux = "wifi_mux.main:main"
+wimux = "wimux.main:main"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
+[tool.setuptools.packages.find]
+where = ["src"]
