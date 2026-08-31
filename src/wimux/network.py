@@ -66,12 +66,12 @@ class NetworkManager:
                 "--silent",
                 "--show-error",
                 "--max-time",
-                "5",
+                str(int(self.timeout)),
                 "https://www.google.com",
             ],
             capture_output=True,
             text=True,
-            timeout=7,
+            timeout=self.timeout + 2,
             check=False,
         )
 

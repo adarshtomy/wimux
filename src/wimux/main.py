@@ -1,9 +1,4 @@
-"""Assemble the components and run the WiFi Mux polling loop.
-
-The daemon repeatedly observes connectivity, asks the state machine what to
-do, and carries out any requested connection change through NetworkManager.
-Signals set a stop flag so the loop can finish cleanly.
-"""
+"""WiFi Mux daemon entry point and runtime orchestration."""
 
 import argparse
 import logging
@@ -19,27 +14,86 @@ from .notifier import notify
 from .state import Action, FailoverStateMachine, State
 
 
+def perform_switch(network, machine, config, action, logger) -> None:
+    """Perform a make-before-break switch between primary and backup."""
+
+    if action is Action.SWITCH_TO_BACKUP:
+        target = config.backup
+        old = config.primary
+        target_state = State.BACKUP
+
+    elif action is Action.SWITCH_TO_PRIMARY:
+        target = config.primary
+        old = config.backup
+        target_state = State.PRIMARY
+
+    else:
+        return
+
+    logger.info(
+        "Switching to %s connection",
+        target_state.name.lower(),
+    )
+
+    try:
+        # 1. Bring the target connection up.
+        network.activate(target.connection)
+
+        # 2. Verify that the target interface has Internet access.
+        if not network.connectivity(target.interface):
+            raise NetworkManagerError(
+                f"target interface {target.interface} "
+                "has no Internet connectivity"
+            )
+
+        # 3. Target is working, so it is safe to take the old connection down.
+        network.deactivate(old.connection)
+
+    except NetworkManagerError:
+        logger.exception("Network switch failed")
+
+        notify(
+            "WiFi Mux",
+            "Network switch failed",
+            config.notifications.enabled,
+        )
+
+        machine.complete_switch(False, target_state)
+
+    else:
+        machine.complete_switch(True, target_state)
+
+        notify(
+            "WiFi Mux",
+            f"{target_state.name.title()} connection active",
+            config.notifications.enabled,
+        )
+
+
 def run_daemon(config_path: str) -> None:
-    """Load settings and run the Wi-Fi failover polling loop."""
+    """Load configuration and run the WiFi Mux polling loop."""
 
     config = load_config(config_path)
     logger = configure(config.logging.level)
 
-    network = NetworkManager(timeout=5)
+    network = NetworkManager(
+        timeout=config.monitor.timeout,
+    )
+
     monitor = ConnectivityMonitor(
         network,
         config.primary.interface,
     )
 
     machine = FailoverStateMachine(
-        config.monitor.failure_threshold,
-        config.monitor.recovery_threshold,
+        failure_threshold=config.monitor.failure_threshold,
+        recovery_threshold=config.monitor.recovery_threshold,
     )
 
     stopping = False
 
     def stop(_signum, _frame) -> None:
-        """Tell the polling loop to stop after the current iteration."""
+        """Request a clean shutdown after the current iteration."""
 
         nonlocal stopping
         stopping = True
@@ -54,35 +108,13 @@ def run_daemon(config_path: str) -> None:
         decision = machine.observe(connected)
 
         if decision.action is not Action.NONE:
-            if decision.action is Action.SWITCH_TO_BACKUP:
-                target = config.backup
-                target_state = State.BACKUP
-            else:
-                target = config.primary
-                target_state = State.PRIMARY
-
-            logger.info(
-                "Switching to %s connection",
-                target_state.name.lower(),
+            perform_switch(
+                network,
+                machine,
+                config,
+                decision.action,
+                logger,
             )
-
-            try:
-                network.activate(target.connection)
-            except NetworkManagerError:
-                logger.exception("Network switch failed")
-                notify(
-                    "WiFi Mux",
-                    "Network switch failed",
-                    config.notifications.enabled,
-                )
-                machine.complete_switch(False, target_state)
-            else:
-                machine.complete_switch(True, target_state)
-                notify(
-                    "WiFi Mux",
-                    f"{target_state.name.title()} connection active",
-                    config.notifications.enabled,
-                )
 
         time.sleep(config.monitor.interval)
 
@@ -90,15 +122,27 @@ def run_daemon(config_path: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Parse command-line options and start the daemon."""
+    """Parse command-line arguments and start the daemon."""
 
-    parser = argparse.ArgumentParser(description="Active-standby Wi-Fi failover daemon")
-    parser.add_argument("-c", "--config", default="/etc/wifi-mux/wifi-mux.toml")
+    parser = argparse.ArgumentParser(
+        description="Active-standby Wi-Fi failover daemon"
+    )
+
+    parser.add_argument(
+        "-c",
+        "--config",
+        default="/etc/wifi-mux/wifi-mux.toml",
+        help="Path to the WiFi Mux configuration file",
+    )
+
     args = parser.parse_args(argv)
+
     try:
         run_daemon(args.config)
     except Exception:
-        logging.getLogger("wimux").exception("WiFi Mux stopped unexpectedly")
+        logging.getLogger("wimux").exception(
+            "WiFi Mux stopped unexpectedly"
+        )
         raise
 
 

@@ -7,8 +7,8 @@ interface = "wlx00c0caafffca"
 connection = "HEVEN_2G"
 
 [backup]
-interface = "<internal-interface>"
-connection = "<backup-networkmanager-connection>"
+interface = "wlp3s0"
+connection = "i-Adarsh"
 
 [monitor]
 interval = 3

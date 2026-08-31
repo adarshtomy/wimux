@@ -38,7 +38,7 @@ def test_connectivity_success():
         calls.append((arguments, kwargs))
         return CompletedProcess(arguments, 0, "", "")
 
-    result = NetworkManager(runner).connectivity("wlan0")
+    result = NetworkManager(runner, timeout=5).connectivity("wlan0")
 
     assert result is True
     assert calls[0][0] == [
